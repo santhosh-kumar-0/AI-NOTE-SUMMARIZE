@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QApplication, QStackedWidget
 from login_page import LoginPage
 from loading_page import LoadingPage
 from ainote_summarizer import AINoteSummarizer
+from PyQt5.QtGui import QIcon
 
 class App(QApplication):
     """
@@ -15,8 +16,18 @@ class App(QApplication):
     def init_ui(self):
         # QStackedWidget allows us to switch between different pages
         self.stacked_widget = QStackedWidget()
-        self.stacked_widget.setWindowTitle("AI Note Summarizer") # Set main window title
+        self.stacked_widget.setWindowTitle("✨ Keypoint AI 💡") # Set main window title
         self.stacked_widget.setFixedSize(800, 700) # Fixed size for the main application window
+
+         # Set application icon using an .ico file
+        # Make sure 'icon.ico' is in your project directory
+        self.setWindowIcon(QIcon('images\icon.ico')) # For the QApplication
+        self.stacked_widget.setWindowIcon(QIcon('images\icon.ico')) # For the main window
+
+        # Set application icon using a .png file
+        # Make sure 'icon.png' is in your project directory
+        self.setWindowIcon(QIcon('images\icon.png')) # For the QApplication
+        self.stacked_widget.setWindowIcon(QIcon('images\icon.png')) # For the main window
 
         # Initialize pages
         self.login_page = LoginPage(self.stacked_widget)

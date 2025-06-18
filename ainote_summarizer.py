@@ -11,10 +11,10 @@ import speech_recognition as sr # For Voice Input
 import os # For temporary file management (less critical now, but still good to have)
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QPushButton,
-                             QLabel, QMessageBox, QFileDialog, QHBoxLayout, QInputDialog,
+                             QLabel, QMessageBox, QFileDialog, QHBoxLayout, QInputDialog, 
                              QApplication, QLineEdit, QSizePolicy, QStackedLayout)
-from PyQt5.QtGui import QFont, QPixmap
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QPixmap, QImage # Added QImage for Pillow conversion
+from PyQt5.QtCore import Qt, QTimer, QBuffer, QIODevice # Added QBuffer, QIODevice for Pillow conversion
 
 from ui_styles import AppStyles
 from voice_recognizer import VoiceRecognizer
@@ -27,13 +27,13 @@ class AINoteSummarizer(QWidget):
     def __init__(self, stacked_widget): # Added stacked_widget parameter
         super().__init__()
         self.stacked_widget = stacked_widget # Store stacked_widget for logout
-        self.setWindowTitle("AI Note Summarizer - Main")
-        self.setGeometry(100, 100, 900, 750)
+        self.setWindowTitle("✨ Keypoint AI 💡 - Main")
+        self.setGeometry(90, 90, 900, 750)
 
         self.is_dark_theme = False # Will be set by LoginPage
         self.api_key = None
         self.voice_recognizer = VoiceRecognizer()
-        self.current_image = None
+        self.current_image = None # Stores PIL Image object for summarization
 
         try:
             genai.configure(api_key="")
@@ -51,7 +51,7 @@ class AINoteSummarizer(QWidget):
 
         # Header with Title and Theme Toggle
         header_layout = QHBoxLayout()
-        title_label = QLabel("AI Note Summarizer")
+        title_label = QLabel("✨ Keypoint AI 💡")
         title_label.setObjectName("SummarizerTitle")
         title_label.setFont(QFont("Segoe UI", 24, QFont.Bold))
         title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -87,12 +87,50 @@ class AINoteSummarizer(QWidget):
         input_section_label.setAlignment(Qt.AlignLeft)
         content_v_layout.addWidget(input_section_label)
 
+        # --- New: Image Display Label ---
+        self.image_display_label = QLabel(self) # Re-added image display label setup
+        self.image_display_label.setAlignment(Qt.AlignCenter) # Re-added image display label setup
+        self.image_display_label.setMinimumHeight(150) # Re-added image display label setup
+        self.image_display_label.setMaximumHeight(300) # Re-added image display label setup
+        self.image_display_label.setScaledContents(True) # Re-added image display label setup
+        self.image_display_label.hide() # Initially hidden
+        content_v_layout.addWidget(self.image_display_label) # Re-added image display label setup
+
+
         self.note_input = QTextEdit(self)
         self.note_input.setPlaceholderText("Type or paste your notes here, or upload a document...")
         self.note_input.setMinimumHeight(180)
         self.note_input.setFont(QFont("Segoe UI", 11))
         self.note_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         content_v_layout.addWidget(self.note_input)
+
+        # --- Middle Buttons Layout: Voice Input, Upload, Summarize
+        middle_buttons_layout = QHBoxLayout()
+        middle_buttons_layout.setSpacing(15)
+
+        self.voice_input_button = QPushButton("🎙️ Start Voice Input", self) # Renamed from record_button for consistency
+        self.voice_input_button.setMinimumHeight(45)
+        self.voice_input_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.voice_input_button.clicked.connect(self.start_voice_input)
+        self.voice_input_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        middle_buttons_layout.addWidget(self.voice_input_button)
+
+        self.upload_button = QPushButton("📁 Upload File", self)
+        self.upload_button.setMinimumHeight(45)
+        self.upload_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.upload_button.clicked.connect(self.upload_document)
+        self.upload_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        middle_buttons_layout.addWidget(self.upload_button)
+
+        self.summarize_button = QPushButton("✨ Summarize ", self)
+        self.summarize_button.setMinimumHeight(55)
+        self.summarize_button.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        self.summarize_button.clicked.connect(self.summarize_content)
+        self.summarize_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        middle_buttons_layout.addWidget(self.summarize_button)
+
+        content_v_layout.addLayout(middle_buttons_layout)
+
 
         # --- Summary Section ---
         output_section_label = QLabel("Summary:")
@@ -109,47 +147,25 @@ class AINoteSummarizer(QWidget):
         self.summary_output.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         content_v_layout.addWidget(self.summary_output)
 
-        # --- All Buttons at the Bottom ---
-        all_buttons_layout = QHBoxLayout()
-        all_buttons_layout.setSpacing(15)
-
-        self.upload_button = QPushButton("📁 Upload File", self)
-        self.upload_button.setMinimumHeight(45)
-        self.upload_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        self.upload_button.clicked.connect(self.upload_document)
-        self.upload_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
-
-        self.clear_button = QPushButton("🗑️ Clear All", self)
-        self.clear_button.setMinimumHeight(45)
-        self.clear_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        self.clear_button.clicked.connect(self.clear_all_inputs)
-        self.clear_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
-
-        self.record_button = QPushButton("🎙️ Start Voice Input", self)
-        self.record_button.setMinimumHeight(45)
-        self.record_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        self.record_button.clicked.connect(self.start_voice_input)
-        self.record_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
-
-        self.summarize_button = QPushButton("✨ Summarize (Gemini 1.5 Flash)", self)
-        self.summarize_button.setMinimumHeight(55)
-        self.summarize_button.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        self.summarize_button.clicked.connect(self.summarize_content)
-        self.summarize_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        # --- Bottom Buttons Layout: Export and Clear All
+        bottom_action_buttons_layout = QHBoxLayout()
+        bottom_action_buttons_layout.setSpacing(15)
 
         self.export_button = QPushButton("💾 Export Summary as PDF", self)
         self.export_button.setMinimumHeight(45)
         self.export_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
         self.export_button.clicked.connect(self.export_to_pdf)
         self.export_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        bottom_action_buttons_layout.addWidget(self.export_button)
 
-        all_buttons_layout.addWidget(self.upload_button)
-        all_buttons_layout.addWidget(self.clear_button)
-        all_buttons_layout.addWidget(self.record_button)
-        all_buttons_layout.addWidget(self.summarize_button)
-        all_buttons_layout.addWidget(self.export_button)
+        self.clear_button = QPushButton("🗑️ Clear All", self)
+        self.clear_button.setMinimumHeight(45)
+        self.clear_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.clear_button.clicked.connect(self.clear_all_inputs)
+        self.clear_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        bottom_action_buttons_layout.addWidget(self.clear_button)
 
-        content_v_layout.addLayout(all_buttons_layout) # Add to content_v_layout
+        content_v_layout.addLayout(bottom_action_buttons_layout)
 
         # --- Wrap content_v_layout in a QWidget to add to QStackedLayout ---
         content_widget = QWidget()
@@ -177,7 +193,7 @@ class AINoteSummarizer(QWidget):
             print(f"Error loading main background image: {e}")
 
     def apply_theme_styles(self):
-        self._set_background_image("main_background.jpg") # Set the main app background image here
+        self._set_background_image("images\main_background.jpg") # Set the main app background image here
 
         # Get the content_widget from the stacked layout to apply its background style
         content_widget = self.layout().itemAt(1).widget()
@@ -197,22 +213,20 @@ class AINoteSummarizer(QWidget):
 
         self.upload_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme))
         self.clear_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme))
-        self.record_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme))
+        self.voice_input_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme))
         self.api_settings_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme))
         self.export_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme))
-        self.theme_toggle_button.setStyleSheet(AppStyles.get_toggle_button_style(self.is_dark_theme)) # Use toggle button style
-        self.logout_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme)) # Style logout button
+        self.theme_toggle_button.setStyleSheet(AppStyles.get_toggle_button_style(self.is_dark_theme))
+        self.logout_button.setStyleSheet(AppStyles.get_secondary_button_style(self.is_dark_theme))
 
         self.summarize_button.setStyleSheet(AppStyles.get_primary_button_style(self.is_dark_theme))
 
         self.theme_toggle_button.setText("☀️ Light Mode" if self.is_dark_theme else "🌙 Dark Mode")
 
-    # --- ADD THIS METHOD HERE ---
     def toggle_theme(self):
         """Toggles the current theme between dark and light and applies the new styles."""
         self.is_dark_theme = not self.is_dark_theme
         self.apply_theme_styles()
-    # --- END ADDITION ---
 
     def show_api_key_dialog(self):
         current_api_key = self.api_key or ""
@@ -234,38 +248,66 @@ class AINoteSummarizer(QWidget):
         self.current_image = None
         self.summary_output.clear()
         self.note_input.setPlaceholderText("Type or paste your notes here, or upload a document...")
+        self.image_display_label.clear() # Clear the image from the label
+        self.image_display_label.hide() # Hide the image label
+
+    def convert_pil_to_qpixmap(self, pil_image): # Re-added this helper method
+        """Converts a PIL Image object to a QPixmap."""
+        if pil_image.mode == "RGB":
+            # Convert to RGB if not already
+            pil_image = pil_image.convert("RGB")
+            # Convert PIL image to QImage
+            qimage = QImage(pil_image.tobytes(), pil_image.size[0], pil_image.size[1],
+                             QImage.Format_RGB888)
+        elif pil_image.mode == "RGBA":
+            # Convert PIL image to QImage (RGBA format)
+            qimage = QImage(pil_image.tobytes(), pil_image.size[0], pil_image.size[1],
+                             QImage.Format_RGBA8888)
+        else:
+            # For other modes, convert to RGBA first for broader compatibility
+            pil_image = pil_image.convert("RGBA")
+            qimage = QImage(pil_image.tobytes(), pil_image.size[0], pil_image.size[1],
+                             QImage.Format_RGBA8888)
+
+        return QPixmap.fromImage(qimage)
 
     def upload_document(self):
-        file_filter = (
-            "All Supported Files (*.pdf *.pptx *.png *.jpg *.jpeg *.txt *.docx *.rtf *.xlsx *.csv);"
-            "Document Files (*.pdf *.pptx *.txt *.docx *.rtf);"
-            "Spreadsheet Files (*.xlsx *.csv);"
-            "Image Files (*.png *.jpg *.jpeg)"
-        )
-        # --- DEBUG PRINTS ADDED HERE ---
-        print(f"DEBUG: Using file filter: {file_filter}")
+        # Define the file filter string directly
+        file_filter = "All Supported Files (*.pdf *.pptx *.png *.jpg *.jpeg *.txt *.docx *.rtf *.xlsx *.csv);;PDF Files (*.pdf);;PowerPoint Files (*.pptx);;Image Files (*.png *.jpg *.jpeg);;Text Files (*.txt);;Word Documents (*.docx);;Rich Text Files (*.rtf);;Excel Files (*.xlsx);;CSV Files (*.csv)"
+        
+        # Call QFileDialog.getOpenFileName only ONCE
         file_path, selected_filter_name = QFileDialog.getOpenFileName(self, "Open File", "", file_filter)
-        print(f"DEBUG: Selected file path: {file_path}")
-        print(f"DEBUG: Selected filter name in dialog: {selected_filter_name}")
-        # --- END DEBUG PRINTS ---
+        
+        # Remove the duplicate debug prints and the second call to getOpenFileName
+        # print(f"DEBUG: Using file filter: {file_filter}")
+        # print(f"DEBUG: Selected file path: {file_filter}") # This was likely a typo, should be file_path
+        # print(f"DEBUG: Selected filter name in dialog: {selected_filter_name}")
 
         if file_path:
-            self.current_image = None # Clear any previously loaded image
+            self.current_image = None # Clear any previously loaded image for Gemini
             self.note_input.clear() # Clear note input when a new file is loaded
+            self.image_display_label.clear() # Clear previous image from display
+            self.image_display_label.hide() # Hide image display by default
             self.summary_output.setPlainText("Processing file...")
-            QApplication.processEvents()
+            QApplication.processEvents() # Update UI to show processing message
 
             file_extension = file_path.lower().split('.')[-1]
 
             if file_extension in ["png", "jpg", "jpeg"]:
                 try:
-                    self.current_image = Image.open(file_path)
+                    self.current_image = Image.open(file_path) # Load image with Pillow for Gemini
+                    qpixmap = self.convert_pil_to_qpixmap(self.current_image) # Convert for display
+                    self.image_display_label.setPixmap(qpixmap) # Set image on the label
+                    self.image_display_label.show() # Show the label
+
                     self.note_input.setPlainText(f"Image loaded: {file_path.split('/')[-1]}\n\n"
                                                   "Click 'Summarize' to get a visual summary.")
                     self.summary_output.setPlainText("Image loaded. Ready to summarize visual content.")
                 except Exception as e:
                     QMessageBox.warning(self, "Image Load Error", f"Could not load image: {str(e)}")
                     self.current_image = None
+                    self.image_display_label.clear()
+                    self.image_display_label.hide()
                     self.summary_output.setPlainText("Failed to load image.")
             else:
                 extracted_text = self.extract_text_from_file(file_path)
@@ -278,9 +320,18 @@ class AINoteSummarizer(QWidget):
             text = ""
 
             if file_extension == "pdf":
-                doc = fitz.open(file_path)
-                text = "\n".join([page.get_text("text") for page in doc])
-                doc.close()
+                try:
+                    doc = fitz.open(file_path)
+                    text = "\n".join([page.get_text("text") for page in doc])
+                    doc.close()
+                except ImportError:
+                    QMessageBox.critical(self, "Missing Dependency",
+                                         "PyMuPDF (fitz) is not installed. Please install it using: pip install PyMuPDF")
+                    return ""
+                except Exception as pdf_e:
+                    QMessageBox.warning(self, "PDF Read Error",
+                                        f"Could not read PDF file. It might be corrupted or encrypted: {pdf_e}")
+                    return ""
             elif file_extension == "pptx":
                 prs = pptx.Presentation(file_path)
                 for slide in prs.slides:
@@ -321,15 +372,17 @@ class AINoteSummarizer(QWidget):
 
             return text.strip()
         except Exception as e:
-            QMessageBox.warning(self, "Error Extracting Text", f"An error occurred while extracting text from {file_path.split('/')[-1]}: {str(e)}")
+            QMessageBox.warning(self, "Error Extracting Text", f"An unexpected error occurred while extracting text from {file_path.split('/')[-1]}: {str(e)}")
             return ""
 
     def start_voice_input(self):
-        self.record_button.setEnabled(False)
+        self.voice_input_button.setEnabled(False) # Renamed from record_button for consistency
         self.original_note_text_before_voice = self.note_input.toPlainText()
         self.note_input.setHtml("🎙️ <b>Listening... Please speak clearly.</b>")
         self.note_input.append("_Say something or wait for timeout if you are done._")
         self.current_image = None # Clear any loaded image if starting voice input
+        self.image_display_label.clear() # Clear displayed image
+        self.image_display_label.hide() # Hide image display
         QApplication.processEvents()
 
         QTimer.singleShot(100, self._process_voice_input)
@@ -356,7 +409,7 @@ class AINoteSummarizer(QWidget):
             self.note_input.setPlainText(self.original_note_text_before_voice)
             QMessageBox.warning(self, "Voice Input Error", "No input detected or unrecognized speech. Please try again.")
 
-        self.record_button.setEnabled(True)
+        self.voice_input_button.setEnabled(True) # Renamed from record_button for consistency
 
     def summarize_content(self):
         if not self.api_key:
@@ -373,8 +426,8 @@ class AINoteSummarizer(QWidget):
         try:
             contents = []
             if self.current_image:
-                prompt = "Please provide a concise summary and description of this image. Identify key objects, actions, and any text visible. Aim for clarity and conciseness, and structure the summary in bullet points or short paragraphs."
-                contents = [prompt, self.current_image]
+                prompt = "Please provide a concise summary and description of this image, identifying key objects, scenes, and any visible text. Aim for clarity and conciseness, and structure the summary in bullet points or short paragraphs."
+                contents = [prompt, self.current_image] # Pass Pillow Image object directly
             else:
                 note_text = self.note_input.toPlainText().strip()
                 if not note_text:
@@ -391,7 +444,7 @@ class AINoteSummarizer(QWidget):
 
                 prompt = (f"Please provide a comprehensive summary of the following text, "
                           f"including key points and main ideas. Aim for clarity and conciseness, "
-                          f"and structure the summary with bullet points or short paragraphs:\n\n{note_text}")
+                          f"and and structure the summary with bullet points or short paragraphs:\n\n{note_text}")
                 contents = [prompt]
 
             if contents:
@@ -471,6 +524,8 @@ class AINoteSummarizer(QWidget):
         self.note_input.clear() # Clear input for next session
         self.summary_output.clear() # Clear output
         self.current_image = None # Clear any loaded image
+        self.image_display_label.clear() # Clear the image from the label
+        self.image_display_label.hide() # Hide the image label
         # Optionally, reset theme to default for login page:
         login_page = self.stacked_widget.widget(0)
         login_page.is_dark_theme = False # Ensure login page starts in light mode

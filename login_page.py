@@ -15,8 +15,8 @@ class LoginPage(QWidget):
     def __init__(self, stacked_widget):
         super().__init__()
         self.stacked_widget = stacked_widget
-        self.setWindowTitle("AI Note Summarizer - Login")
-        self.setGeometry(100, 100, 600, 600)
+        self.setWindowTitle("✨ Keypoint AI 💡 - Login")
+        self.setGeometry(100, 100, 500, 500)
 
         self.setObjectName("LoginPage")
         self.is_dark_theme = False # Login page starts in light theme
@@ -31,7 +31,7 @@ class LoginPage(QWidget):
         content_layout.setContentsMargins(100, 50, 100, 50)
 
         # Title
-        title = QLabel("AI Note Summarizer")
+        title = QLabel("✨ Keypoint AI 💡")
         title.setObjectName("AppTitle")
         title.setAlignment(Qt.AlignCenter)
         title.setFont(QFont("Segoe UI", 28, QFont.Bold))
@@ -104,7 +104,7 @@ class LoginPage(QWidget):
 
     def apply_theme_styles(self):
         """Applies the current theme's stylesheets to all widgets on the login page."""
-        self._set_background_image("login_background.jpg")
+        self._set_background_image("images\login_background.jpg")
 
         self.setStyleSheet(AppStyles.get_label_style(self.is_dark_theme, "16px", "normal"))
 
