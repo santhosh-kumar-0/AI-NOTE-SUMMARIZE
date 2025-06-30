@@ -151,10 +151,11 @@ class AINoteSummarizer(QWidget):
         bottom_action_buttons_layout = QHBoxLayout()
         bottom_action_buttons_layout.setSpacing(15)
 
-        self.export_button = QPushButton("💾 Export Summary as PDF", self)
+        # Changed to export as TXT
+        self.export_button = QPushButton("💾 Export Summary as TXT", self)
         self.export_button.setMinimumHeight(45)
         self.export_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        self.export_button.clicked.connect(self.export_to_pdf)
+        self.export_button.clicked.connect(self.export_to_txt) # Connect to new export_to_txt method
         self.export_button.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
         bottom_action_buttons_layout.addWidget(self.export_button)
 
@@ -278,11 +279,6 @@ class AINoteSummarizer(QWidget):
         # Call QFileDialog.getOpenFileName only ONCE
         file_path, selected_filter_name = QFileDialog.getOpenFileName(self, "Open File", "", file_filter)
         
-        # Remove the duplicate debug prints and the second call to getOpenFileName
-        # print(f"DEBUG: Using file filter: {file_filter}")
-        # print(f"DEBUG: Selected file path: {file_filter}") # This was likely a typo, should be file_path
-        # print(f"DEBUG: Selected filter name in dialog: {selected_filter_name}")
-
         if file_path:
             self.current_image = None # Clear any previously loaded image for Gemini
             self.note_input.clear() # Clear note input when a new file is loaded
@@ -301,7 +297,7 @@ class AINoteSummarizer(QWidget):
                     self.image_display_label.show() # Show the label
 
                     self.note_input.setPlainText(f"Image loaded: {file_path.split('/')[-1]}\n\n"
-                                                  "Click 'Summarize' to get a visual summary.")
+                                                 "Click 'Summarize' to get a visual summary.")
                     self.summary_output.setPlainText("Image loaded. Ready to summarize visual content.")
                 except Exception as e:
                     QMessageBox.warning(self, "Image Load Error", f"Could not load image: {str(e)}")
@@ -330,7 +326,7 @@ class AINoteSummarizer(QWidget):
                     return ""
                 except Exception as pdf_e:
                     QMessageBox.warning(self, "PDF Read Error",
-                                        f"Could not read PDF file. It might be corrupted or encrypted: {pdf_e}")
+                                         f"Could not read PDF file. It might be corrupted or encrypted: {pdf_e}")
                     return ""
             elif file_extension == "pptx":
                 prs = pptx.Presentation(file_path)
@@ -399,12 +395,12 @@ class AINoteSummarizer(QWidget):
         elif error:
             self.note_input.setPlainText(self.original_note_text_before_voice)
             QMessageBox.warning(self, "Voice Input Error",
-                                f"{error}\n\n**Tips:**\n"
-                                f"- Ensure your microphone is properly connected and selected.\n"
-                                f"- Speak clearly and at a moderate pace.\n"
-                                f"- Minimize background noise.\n"
-                                f"- Check your internet connection for online recognition."
-            )
+                                 f"{error}\n\n**Tips:**\n"
+                                 f"- Ensure your microphone is properly connected and selected.\n"
+                                 f"- Speak clearly and at a moderate pace.\n"
+                                 f"- Minimize background noise.\n"
+                                 f"- Check your internet connection for online recognition."
+                                )
         else:
             self.note_input.setPlainText(self.original_note_text_before_voice)
             QMessageBox.warning(self, "Voice Input Error", "No input detected or unrecognized speech. Please try again.")
@@ -481,42 +477,25 @@ class AINoteSummarizer(QWidget):
         finally:
             pass
 
-    def export_to_pdf(self):
+    def export_to_txt(self): # Renamed from export_to_pdf
         summary_text = self.summary_output.toPlainText()
         if not summary_text or "Error:" in summary_text or "No summary" in summary_text or "Generating summary" in summary_text:
             QMessageBox.warning(self, "Export Failed", "No valid summary to export. Please generate a summary first.")
             return
 
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Summary as PDF", "", "PDF Files (*.pdf)")
+        # Changed to save as TXT
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Summary as Text", "", "Text Files (*.txt)")
         if file_path:
             try:
-                doc = fitz.open()
-                page_width = 595
-                page_height = 842
-                margin = 50
-
-                page = doc.new_page(width=page_width, height=page_height)
-                title = "AI-Generated Note Summary"
-                title_font_size = 20
-                page.insert_text((margin, margin), title, fontsize=title_font_size, fontname="helv-bold")
-
-                current_y = margin + title_font_size + 20
-
-                text_rect = fitz.Rect(margin, current_y, page_width - margin, page_height - margin)
-                font_size = 11
-
-                remainder = page.insert_textbox(text_rect, summary_text, fontsize=font_size, fontname="helv")
-
-                while remainder:
-                    page = doc.new_page(width=page_width, height=page_height)
-                    remainder = page.insert_textbox(fitz.Rect(margin, margin, page_width - margin, page_height - margin),
-                                                    remainder, fontsize=font_size, fontname="helv")
-
-                doc.save(file_path)
-                doc.close()
-                QMessageBox.information(self, "Success", "Summary exported as PDF successfully!")
+                # Ensure the file has a .txt extension
+                if not file_path.lower().endswith('.txt'):
+                    file_path += '.txt'
+                    
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(summary_text)
+                QMessageBox.information(self, "Success", "Summary exported as TXT successfully!")
             except Exception as e:
-                QMessageBox.warning(self, "Export Error", f"Failed to export PDF. Ensure you have PyMuPDF installed and write permissions.\nError: {str(e)}")
+                QMessageBox.warning(self, "Export Error", f"Failed to export summary as TXT.\nError: {str(e)}")
 
     def logout(self):
         """Logs out the user and returns to the login page."""
